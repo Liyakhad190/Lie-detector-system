@@ -43,10 +43,25 @@ class SessionReportGenerator:
             print("[REPORT] Warning: No log entries recorded in session.")
 
         # Compute aggregate statistics
-        probs = [e.get("deception_probability", 0.0) for e in log_entries if "deception_probability" in e]
-        stress_scores = [e.get("stress_score", 0.0) for e in log_entries if "stress_score" in e]
-        blink_rates = [e.get("blink_rate", 0.0) for e in log_entries if "blink_rate" in e]
-        hrs = [e.get("heart_rate", 75.0) for e in log_entries if "heart_rate" in e]
+        # Support both in-memory dict keys and CSV-serialised key names (deception_prob vs deception_probability)
+        def _getf(entry, *keys):
+            for k in keys:
+                v = entry.get(k)
+                if v is not None:
+                    try:
+                        return float(v)
+                    except (TypeError, ValueError):
+                        pass
+            return None
+
+        probs = [_getf(e, "deception_probability", "deception_prob") for e in log_entries]
+        probs = [v for v in probs if v is not None]
+        stress_scores = [_getf(e, "stress_score") for e in log_entries]
+        stress_scores = [v for v in stress_scores if v is not None]
+        blink_rates = [_getf(e, "blink_rate") for e in log_entries]
+        blink_rates = [v for v in blink_rates if v is not None]
+        hrs = [_getf(e, "heart_rate", "estimated_hr") for e in log_entries]
+        hrs = [v for v in hrs if v is not None]
 
         mean_prob = float(np.mean(probs)) if probs else 0.0
         max_prob = float(np.max(probs)) if probs else 0.0

@@ -43,6 +43,7 @@ from modules.calibration import CalibrationManager
 from modules.session_logger import SessionLogger
 from modules.polygraph_analyzer import PolygraphAnalyzer
 from modules.voice_analyzer import VoiceAnalyzer
+from modules.elicitation_protocol import ElicitationProtocolManager, QuestionCategory
 
 
 class LieDetectionSystem:
@@ -53,11 +54,11 @@ class LieDetectionSystem:
     1. Capture frame from webcam
     2. Detect faces and extract landmarks
     3. Analyze blink patterns, movement, micro-expressions
-    4. Compute stress indicators
+    4. Compute stress indicators & remote photoplethysmography (rPPG)
     5. Extract feature vector
-    6. Predict deception probability
-    7. Render futuristic HUD overlay
-    8. Log results
+    6. Predict calibrated deception/anomaly probability with explainability
+    7. Render futuristic HUD overlay & interview protocol prompts
+    8. Log results and generate Markdown/JSON audit reports
     """
 
     def __init__(self):
@@ -93,6 +94,7 @@ class LieDetectionSystem:
         self.calibration = CalibrationManager()
         self.logger = SessionLogger()
         self.voice_analyzer = VoiceAnalyzer()
+        self.protocol_manager = ElicitationProtocolManager("ALIBI_INVESTIGATION")
 
         # State
         self.show_mesh = True
@@ -109,7 +111,7 @@ class LieDetectionSystem:
         # Start session
         self.logger.start_session()
         print("[INIT] System ready! Starting calibration...")
-        print("[CONTROLS] Q=Quit | S=Save | C=Calibrate | R=Reset | M=Toggle Mesh | SPACE=Answer | T=Record Question")
+        print("[CONTROLS] Q=Quit | S=Save/Audit | C=Calibrate | R=Reset | M=Mesh | P=Cycle Protocol | SPACE=Next Question | T=Record Voice")
         print()
 
         # Auto-start calibration
@@ -162,7 +164,15 @@ class LieDetectionSystem:
             blink_data, movement_data, micro_data, stress_data
         )
 
-        # Step 6: Calibration sample or prediction
+        # Step 6: Physiological rPPG update (forehead pulse)
+        polygraph_data = polygraph.update(
+            frame,
+            face.landmarks,
+            stress_data.get("stress_score", 0.0),
+            0.0
+        )
+
+        # Step 7: Calibration sample or prediction with explainability & autonomic fusion
         prediction = {}
         if self.calibration.is_calibrating:
             self.calibration.add_sample(
@@ -172,10 +182,12 @@ class LieDetectionSystem:
                 "deception_probability": 0.0,
                 "truth_probability": 1.0,
                 "confidence": 0.0,
+                "confidence_interval": (0.0, 0.0),
                 "label": "CALIBRATING...",
                 "label_color": "calibration",
                 "method": "CALIBRATION",
                 "indicators": {},
+                "explainability": {},
             }
         else:
             # Apply baseline if available
@@ -185,23 +197,28 @@ class LieDetectionSystem:
                 micro_analyzer.set_baseline(bl["face_symmetry"], bl["lip_movement"])
                 self.model.set_baseline(bl["avg_features"])
 
-            prediction = self.model.predict(features)
+            prediction = self.model.predict(features, polygraph_data=polygraph_data)
+
+        # Record prediction into active protocol question
+        self.protocol_manager.record_frame(prediction)
 
         # Log data
+        current_q_text = ""
+        active_q = self.protocol_manager.get_current_question()
+        if active_q:
+            current_q_text = f"[{active_q.category.value}] {active_q.text}"
+        elif self.voice_analyzer.get_question():
+            current_q_text = self.voice_analyzer.get_question()
+
         self.logger.log(
             time.time(), face.face_id,
             blink_data, movement_data, micro_data,
             stress_data, prediction,
-            question=self.voice_analyzer.get_question()
+            question=current_q_text
         )
 
-        # Update Polygraph (after prediction to include its probability)
-        polygraph_data = polygraph.update(
-            frame,
-            face.landmarks,
-            stress_data.get("stress_score", 0.0),
-            prediction.get("deception_probability", 0.0)
-        )
+        # Update Polygraph with final prediction probability for chart
+        polygraph.history["deception"].append(prediction.get("deception_probability", 0.0))
         
         # Buffer for interview mode
         if self.interview_state == 1:
@@ -235,9 +252,18 @@ class LieDetectionSystem:
         if key == ord('q') or key == ord('Q'):
             self.running = False
         elif key == ord('s') or key == ord('S'):
-            saved = self.logger.save()
+            saved = self.logger.save(
+                protocol_summary=self.protocol_manager.get_protocol_summary(),
+                baseline=self.calibration.baseline
+            )
             if saved:
-                print(f"[SAVE] Session saved to: {saved}")
+                print(f"[SAVE] Session data & audit reports saved to: {saved}")
+        elif key == ord('p') or key == ord('P'):
+            protocols = list(self.protocol_manager.PROTOCOLS.keys())
+            curr_proto = self.protocol_manager.protocol_name
+            next_proto = protocols[(protocols.index(curr_proto) + 1) % len(protocols)]
+            self.protocol_manager.load_protocol(next_proto)
+            print(f"[PROTOCOL] Switched active protocol to: {next_proto}")
         elif key == ord('c') or key == ord('C'):
             print("[CALIBRATION] Restarting calibration...")
             self.calibration.reset()
@@ -258,58 +284,40 @@ class LieDetectionSystem:
             self.show_mesh = not self.show_mesh
             print(f"[UI] Mesh display: {'ON' if self.show_mesh else 'OFF'}")
         elif key == 32: # Spacebar
-            if self.interview_state == 0:
+            if not self.protocol_manager.is_active:
+                self.protocol_manager.start_protocol()
                 self.interview_state = 1
-                self.recording_buffer = []
-                self.final_verdict = None
-                print("[MODE] RECORDING ANSWER...")
-            elif self.interview_state == 1:
-                self.interview_state = 2
-                self._compute_final_verdict()
-                print("[MODE] FINAL VERDICT RENDERED.")
-            elif self.interview_state == 2:
-                self.interview_state = 0
-                self.recording_buffer = []
-                self.final_verdict = None
-                print("[MODE] IDLE. Waiting for question...")
+                q = self.protocol_manager.get_current_question()
+                print(f"[PROTOCOL] Started '{self.protocol_manager.protocol_name}'. Q1: {q.text if q else ''}")
+            else:
+                summary = self.protocol_manager.advance_question()
+                q = self.protocol_manager.get_current_question()
+                if q:
+                    print(f"[PROTOCOL] Q{q.qid} [{q.category.value}]: {q.text}")
+                    self.interview_state = 1
+                else:
+                    print("[PROTOCOL] All questions completed! Computing final protocol verdict...")
+                    self.interview_state = 2
+                    self._compute_final_verdict()
         elif key == ord('t') or key == ord('T'):
-            if self.interview_state == 0:
-                print("[VOICE] Listening for question...")
-                self.voice_analyzer.start_listening()
+            print("[VOICE] Listening for custom spoken question...")
+            self.voice_analyzer.start_listening()
 
     def _compute_final_verdict(self):
-        if not self.recording_buffer:
-            self.final_verdict = {
-                "deception_probability": 0.0,
-                "truth_probability": 1.0,
-                "label": "INSUFFICIENT DATA",
-                "label_color": "warning",
-                "confidence": 0.0
-            }
-            return
-            
-        avg_deception = float(np.mean([p.get("deception_probability", 0) for p in self.recording_buffer]))
-        avg_truth = float(np.mean([p.get("truth_probability", 1) for p in self.recording_buffer]))
+        proto_summary = self.protocol_manager.get_protocol_summary()
+        mean_crit = proto_summary.get("mean_critical_score", 0.0)
+        mean_base = proto_summary.get("mean_baseline_score", 0.0)
+        delta = proto_summary.get("probe_reactivity_delta", 0.0)
+        verdict = proto_summary.get("overall_verdict", "INCONCLUSIVE")
+        color = proto_summary.get("verdict_color", "warning")
         
-        if avg_deception > 0.6:
-            label = "DECEPTION DETECTED"
-            color = "deception"
-            conf = avg_deception
-        elif avg_truth > 0.6:
-            label = "TRUTHFUL"
-            color = "truth"
-            conf = avg_truth
-        else:
-            label = "INCONCLUSIVE"
-            color = "warning"
-            conf = max(avg_deception, avg_truth)
-            
         self.final_verdict = {
-            "deception_probability": avg_deception,
-            "truth_probability": avg_truth,
-            "label": label,
+            "deception_probability": mean_crit,
+            "truth_probability": max(0.0, 1.0 - mean_crit),
+            "label": verdict,
             "label_color": color,
-            "confidence": conf
+            "confidence": min(0.95, max(0.40, 0.50 + abs(delta))),
+            "details": f"Probe Reactivity Delta: {delta:+.2f} (Critical: {mean_crit:.2f} vs Base: {mean_base:.2f})"
         }
 
     def run(self):
@@ -350,6 +358,13 @@ class LieDetectionSystem:
                     except Exception as e:
                         print(f"[ERROR] Face processing: {e}")
 
+                # Determine active question text
+                active_q = self.protocol_manager.get_current_question()
+                if active_q:
+                    q_display = f"[{self.protocol_manager.protocol_name[:5]}|{active_q.category.value}] Q{active_q.qid}: {active_q.text}"
+                else:
+                    q_display = self.voice_analyzer.get_question()
+
                 # Render HUD overlay
                 frame = self.hud.render(
                     frame,
@@ -361,7 +376,7 @@ class LieDetectionSystem:
                     log_count=self.logger.get_entry_count(),
                     interview_state=self.interview_state,
                     final_verdict=self.final_verdict,
-                    current_question=self.voice_analyzer.get_question()
+                    current_question=q_display
                 )
 
                 # Display
@@ -383,8 +398,11 @@ class LieDetectionSystem:
 
     def shutdown(self):
         """Clean shutdown of all resources."""
-        print("\n[SHUTDOWN] Saving session data...")
-        self.logger.close()
+        print("\n[SHUTDOWN] Saving session data & generating audit report...")
+        self.logger.close(
+            protocol_summary=self.protocol_manager.get_protocol_summary(),
+            baseline=self.calibration.baseline
+        )
         self.voice_analyzer.stop_listening()
         print("[SHUTDOWN] Releasing camera...")
         self.cap.release()

@@ -1,9 +1,10 @@
 """
 ============================================================================
- ML MODEL MODULE - Deception Prediction
+ ML MODEL MODULE - Calibrated Behavioral Anomaly & Deception Estimation
 ============================================================================
- Machine learning model for predicting deception probability.
+ Machine learning model for estimating behavioral anomaly probability.
  Supports Random Forest, SVM, Logistic Regression, and Neural Network.
+ Integrates Explainability Decomposition and Autonomic (rPPG) inputs.
  Includes a heuristic fallback when no trained model is available.
 ============================================================================
 """
@@ -11,17 +12,18 @@
 import os
 import numpy as np
 import pickle
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple, Optional, Any
 from collections import deque
 import config
+from modules.explainability import ExplainabilityDecomposer
 
 
 class DeceptionModel:
     """
-    ML model for deception probability estimation.
+    ML model for behavioral anomaly and deception probability estimation.
     
-    Falls back to a heuristic rule-based system when no trained
-    model is available, providing reasonable behavioral analysis.
+    Provides calibrated probabilities, confidence bounds, multi-channel
+    explainability breakdown, and graceful fallback heuristics.
     """
 
     def __init__(self):
@@ -30,11 +32,12 @@ class DeceptionModel:
         self._model_loaded = False
         self._prediction_history = deque(maxlen=30)
         self._smoothed_prediction = 0.5
-        self._baseline_features = None
+        self._baseline_features: Optional[np.ndarray] = None
+        self._decomposer = ExplainabilityDecomposer()
         self._load_model()
 
     def _load_model(self):
-        """Attempt to load a pre-trained model from disk."""
+        """Attempt to load a pre-trained model and scaler from disk."""
         try:
             if os.path.exists(config.MODEL_PATH):
                 with open(config.MODEL_PATH, "rb") as f:
@@ -51,26 +54,43 @@ class DeceptionModel:
             print("[MODEL] Using heuristic-based analysis instead.")
             self._model_loaded = False
 
-    def predict(self, features: np.ndarray) -> Dict:
-        """
-        Predict deception probability from feature vector.
-        
-        Returns:
-            Dictionary with prediction results.
-        """
-        if self._model_loaded and self._model is not None:
-            return self._ml_predict(features)
-        else:
-            return self._heuristic_predict(features)
+    @property
+    def is_loaded(self) -> bool:
+        return self._model_loaded and self._model is not None
 
-    def _ml_predict(self, features: np.ndarray) -> Dict:
-        """Use trained ML model for prediction."""
+    def predict(self, features: np.ndarray, polygraph_data: Optional[Dict] = None) -> Dict[str, Any]:
+        """
+        Predict deception/behavioral anomaly probability from feature vector.
+        
+        Args:
+            features: 22-dimensional feature vector.
+            polygraph_data: Optional physiological dict (rPPG HR, stress signal).
+            
+        Returns:
+            Dictionary containing calibrated probability, confidence bounds,
+            evidence decomposition, and scientific labels.
+        """
+        if features is None or len(features) < len(config.FEATURE_NAMES):
+            return self._empty_prediction()
+
+        # Run Explainability Decomposition across 4 channels
+        explainability = self._decomposer.decompose(
+            features, polygraph_data=polygraph_data, baseline=self._baseline_features
+        )
+
+        if self._model_loaded and self._model is not None:
+            return self._ml_predict(features, explainability)
+        else:
+            return self._heuristic_predict(features, explainability)
+
+    def _ml_predict(self, features: np.ndarray, explainability: Dict[str, Any]) -> Dict[str, Any]:
+        """Use trained ML model for prediction with explainability fusion."""
         try:
             X = features.reshape(1, -1)
             if self._scaler is not None:
                 X = self._scaler.transform(X)
 
-            # Get probability
+            # Get raw probability
             if hasattr(self._model, "predict_proba"):
                 proba = self._model.predict_proba(X)[0]
                 deception_prob = float(proba[1]) if len(proba) > 1 else float(proba[0])
@@ -78,132 +98,98 @@ class DeceptionModel:
                 pred = self._model.predict(X)[0]
                 deception_prob = float(pred)
 
-            return self._format_prediction(deception_prob, "ML_MODEL")
+            # Fuse slightly with explainability composite to stabilize edge anomalies
+            composite_decomp = explainability.get("composite_anomaly_score", deception_prob)
+            fused_prob = float(0.70 * deception_prob + 0.30 * composite_decomp)
+
+            return self._format_prediction(fused_prob, "ML_MODEL", explainability)
         except Exception as e:
             print(f"[MODEL] ML prediction error: {e}")
-            return self._heuristic_predict(features)
+            return self._heuristic_predict(features, explainability)
 
-    def _heuristic_predict(self, features: np.ndarray) -> Dict:
+    def _heuristic_predict(self, features: np.ndarray, explainability: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Rule-based heuristic for deception estimation.
-        
-        Uses weighted behavioral indicators with baseline comparison
-        to produce a deception probability estimate.
+        Rule-based heuristic for deception estimation when no trained ML weights exist.
+        Directly driven by explainability channel weights.
         """
-        score = 0.0
-        indicators = {}
-
-        # Feature index mapping (from config.FEATURE_NAMES)
-        blink_rate = features[0]
-        gaze_h_std = features[4]
-        gaze_v_std = features[5]
-        fixation = features[6]
-        head_pitch_std = features[7]
-        head_yaw_std = features[8]
-        head_movement = features[10]
-        symmetry = features[11]
-        sym_change = features[12]
-        lip_movement = features[13]
-        lip_compression = features[14]
-        eyebrow_tension = features[15]
-        brow_asymmetry = features[16]
-        micro_count = features[17]
-        micro_intensity = features[18]
-        facial_tension = features[19]
-        nervous_score = features[20]
-        jaw_clench = features[21]
-
-        # 1. Blink rate anomaly (weight: 0.15)
-        if blink_rate > 30:
-            indicators["excessive_blinking"] = min(1.0, (blink_rate - 20) / 30)
-            score += indicators["excessive_blinking"] * 0.15
-        elif blink_rate < 5 and blink_rate > 0:
-            indicators["suppressed_blinking"] = min(1.0, (10 - blink_rate) / 10)
-            score += indicators["suppressed_blinking"] * 0.10
-
-        # 2. Gaze instability (weight: 0.15)
-        gaze_instability = min(1.0, (gaze_h_std + gaze_v_std) * 2.0)
-        indicators["gaze_instability"] = gaze_instability
-        score += gaze_instability * 0.15
-
-        # 3. Head movement (weight: 0.10)
-        head_agitation = min(1.0, head_movement * 0.5 + head_pitch_std * 0.02)
-        indicators["head_agitation"] = head_agitation
-        score += head_agitation * 0.10
-
-        # 4. Face asymmetry (weight: 0.12)
-        asym_score = min(1.0, (1.0 - symmetry) * 3.0 + sym_change * 5.0)
-        indicators["face_asymmetry"] = asym_score
-        score += asym_score * 0.12
-
-        # 5. Lip tension (weight: 0.10)
-        lip_score = min(1.0, max(0, 1.0 - lip_compression * 2.5))
-        indicators["lip_tension"] = lip_score
-        score += lip_score * 0.10
-
-        # 6. Eyebrow tension (weight: 0.08)
-        indicators["eyebrow_stress"] = eyebrow_tension
-        score += eyebrow_tension * 0.08
-
-        # 7. Micro-expressions (weight: 0.10)
-        micro_score = min(1.0, micro_count * 0.3 + micro_intensity)
-        indicators["micro_expressions"] = micro_score
-        score += micro_score * 0.10
-
-        # 8. Overall tension (weight: 0.10)
-        indicators["facial_tension"] = facial_tension
-        score += facial_tension * 0.10
-
-        # 9. Nervous movement (weight: 0.10)
-        indicators["nervousness"] = nervous_score
-        score += nervous_score * 0.10
-
-        deception_prob = float(np.clip(score, 0.0, 1.0))
-        return self._format_prediction(deception_prob, "HEURISTIC", indicators)
+        composite_score = explainability.get("composite_anomaly_score", 0.0)
+        deception_prob = float(np.clip(composite_score, 0.0, 1.0))
+        return self._format_prediction(deception_prob, "HEURISTIC", explainability)
 
     def _format_prediction(self, deception_prob: float, method: str,
-                           indicators: Optional[Dict] = None) -> Dict:
-        """Format and smooth prediction output."""
+                           explainability: Dict[str, Any]) -> Dict[str, Any]:
+        """Format, smooth, and attach confidence intervals and scientific diagnostics."""
         # Apply temporal smoothing
         self._prediction_history.append(deception_prob)
         alpha = config.PREDICTION_SMOOTHING
         self._smoothed_prediction = (
             alpha * self._smoothed_prediction +
-            (1 - alpha) * deception_prob
+            (1.0 - alpha) * deception_prob
         )
 
         smoothed = float(np.clip(self._smoothed_prediction, 0.0, 1.0))
         truth_prob = 1.0 - smoothed
 
-        # Confidence based on prediction stability
+        # Empirical standard deviation and confidence interval calculation
         if len(self._prediction_history) > 5:
-            stability = 1.0 - np.std(list(self._prediction_history)[-15:]) * 2
-            confidence = float(np.clip(stability, 0.3, 0.95))
+            hist = list(self._prediction_history)[-15:]
+            std_dev = float(np.std(hist))
+            stability = 1.0 - std_dev * 2.0
+            confidence = float(np.clip(stability, 0.30, 0.95))
+            ci_lower = max(0.0, smoothed - 1.96 * std_dev)
+            ci_upper = min(1.0, smoothed + 1.96 * std_dev)
         else:
-            confidence = 0.5
+            confidence = 0.50
+            ci_lower = max(0.0, smoothed - 0.15)
+            ci_upper = min(1.0, smoothed + 0.15)
 
-        # Classification
-        if smoothed > config.CONFIDENCE_THRESHOLD:
-            label = "POTENTIAL DECEPTION"
+        # Scientifically responsible classification labels
+        if smoothed > 0.65:
+            label = "HIGH BEHAVIORAL ANOMALY"
             label_color = "deception"
+            risk_tier = "HIGH"
+        elif smoothed > 0.40:
+            label = "MODERATE BEHAVIORAL STRESS"
+            label_color = "warning"
+            risk_tier = "MODERATE"
         else:
-            label = "LIKELY TRUTHFUL"
+            label = "BASELINE CONSISTENT"
             label_color = "truth"
+            risk_tier = "LOW"
 
         return {
-            "deception_probability": smoothed,
-            "truth_probability": truth_prob,
-            "confidence": confidence,
+            "deception_probability": round(smoothed, 3),
+            "truth_probability": round(truth_prob, 3),
+            "confidence": round(confidence, 3),
+            "confidence_interval": (round(ci_lower, 3), round(ci_upper, 3)),
             "label": label,
             "label_color": label_color,
+            "risk_tier": risk_tier,
             "method": method,
-            "indicators": indicators or {},
-            "raw_score": deception_prob,
+            "explainability": explainability,
+            "raw_score": round(deception_prob, 3),
+            "scientific_disclaimer": config.DISCLAIMER
+        }
+
+    def _empty_prediction(self) -> Dict[str, Any]:
+        return {
+            "deception_probability": 0.0,
+            "truth_probability": 1.0,
+            "confidence": 0.0,
+            "confidence_interval": (0.0, 0.0),
+            "label": "NO DATA",
+            "label_color": "warning",
+            "risk_tier": "UNKNOWN",
+            "method": "NONE",
+            "explainability": self._decomposer._empty_decomposition(),
+            "raw_score": 0.0,
+            "scientific_disclaimer": config.DISCLAIMER
         }
 
     def set_baseline(self, features: np.ndarray):
         """Set baseline features from calibration."""
-        self._baseline_features = features.copy()
+        if features is not None:
+            self._baseline_features = features.copy()
 
     def reset(self):
         """Reset prediction state."""

@@ -371,16 +371,40 @@ class HUDRenderer:
                     cv2.FONT_HERSHEY_SIMPLEX, 0.4, self._colors["deception"], 1, cv2.LINE_AA)
 
         y += 25
-        # Confidence
-        cv2.putText(frame, f"CONFIDENCE: {confidence:.0%}", (x, y),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.4,
+        # Confidence and CI
+        ci = pred.get("confidence_interval", (0.0, 0.0))
+        cv2.putText(frame, f"CONFIDENCE: {confidence:.0%} [CI: {ci[0]:.0%}-{ci[1]:.0%}]", (x, y),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.38,
                     self._colors["secondary"], 1, cv2.LINE_AA)
 
         # Method indicator
         method = pred.get("method", "HEURISTIC")
-        cv2.putText(frame, f"[{method}]", (x + 200, y),
+        cv2.putText(frame, f"[{method}]", (x + 230, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.35,
                     self._colors["text_secondary"], 1, cv2.LINE_AA)
+
+        # Multi-Channel Anomaly Attribution Mini-Gauges
+        exp = pred.get("explainability", {})
+        channels = exp.get("channels", {})
+        if channels:
+            y += 22
+            cv2.putText(frame, "ANOMALY CHANNELS:", (x, y),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.35, self._colors["text_secondary"], 1, cv2.LINE_AA)
+            channel_items = [
+                ("OCULAR", channels.get("ocular", {}).get("score", 0.0)),
+                ("TENSION", channels.get("myofacial", {}).get("score", 0.0)),
+                ("MICRO", channels.get("micro_dynamics", {}).get("score", 0.0)),
+                ("PULSE", channels.get("autonomic", {}).get("score", 0.0)),
+            ]
+            cx_pos = x
+            for ch_name, ch_score in channel_items:
+                y_ch = y + 15
+                ch_color = self._colors["danger"] if ch_score > 0.50 else (
+                    self._colors["warning"] if ch_score > 0.30 else self._colors["success"]
+                )
+                cv2.putText(frame, f"{ch_name[:3]}:{ch_score:.0%}", (cx_pos, y_ch),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.32, ch_color, 1, cv2.LINE_AA)
+                cx_pos += 65
 
     def _draw_calibration_overlay(self, frame: np.ndarray,
                                    progress: float, remaining: float):

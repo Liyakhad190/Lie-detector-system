@@ -72,8 +72,8 @@ class SessionLogger:
         }
         self._entries.append(entry)
 
-    def save(self) -> str:
-        """Save all logged entries to CSV file."""
+    def save(self, protocol_summary: Optional[Dict] = None, baseline: Optional[Dict] = None) -> str:
+        """Save all logged entries to CSV file and generate Markdown/JSON reports."""
         if not self._entries:
             print("[LOGGER] No entries to save.")
             return ""
@@ -87,15 +87,29 @@ class SessionLogger:
                 writer.writeheader()
                 writer.writerows(self._entries)
             print(f"[LOGGER] Saved {len(self._entries)} entries to {self._log_file}")
+
+            # Generate Markdown and JSON Audit Reports
+            from modules.report_generator import SessionReportGenerator
+            generator = SessionReportGenerator()
+            generator.generate_report(
+                session_id=self._session_id,
+                log_entries=self._entries,
+                protocol_summary=protocol_summary,
+                baseline=baseline
+            )
             return self._log_file
         except Exception as e:
             print(f"[LOGGER] Error saving: {e}")
             return ""
 
+    def get_entries(self) -> List[Dict]:
+        """Get all raw logged entries."""
+        return self._entries
+
     def get_entry_count(self) -> int:
         """Get number of logged entries."""
         return len(self._entries)
 
-    def close(self):
+    def close(self, protocol_summary: Optional[Dict] = None, baseline: Optional[Dict] = None):
         """Save and close the session."""
-        self.save()
+        self.save(protocol_summary=protocol_summary, baseline=baseline)

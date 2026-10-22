@@ -1,32 +1,37 @@
-# 🔍 Deception Analysis System v2.0
+# 🔍 Deception Analysis System v2.0 (Enhanced Edition)
 
-> **⚠️ EDUCATIONAL & EXPERIMENTAL PROJECT ONLY**
+> **⚠️ EDUCATIONAL & EXPERIMENTAL RESEARCH SYSTEM ONLY**
 > This system does NOT provide scientifically validated lie detection.
-> Results are behavioral estimates, not definitive truth assessments.
+> Results are behavioral estimates and stress anomalies, NOT definitive truth assessments.
 > Do NOT use this for any legal, employment, or judicial purposes.
 
-A real-time facial behavioral analysis system using computer vision,
-MediaPipe Face Mesh, and machine learning to estimate potential deception
-indicators from facial behavior patterns.
+A real-time multimodal facial and physiological behavioral analysis system using computer vision,
+MediaPipe Face Mesh (468+ landmarks), remote photoplethysmography (rPPG), and machine learning to estimate behavioral anomaly patterns.
 
 ---
 
-## 🎯 Features
+## 🎯 Enhanced Features
 
-- **Real-time face detection** with 468+ facial landmarks (MediaPipe)
-- **Multi-face support** (up to 3 simultaneous faces)
-- **Eye blink detection** using Eye Aspect Ratio (EAR) algorithm
-- **Eye gaze tracking** via iris landmark analysis
-- **Head pose estimation** (pitch, yaw, roll)
-- **Face symmetry analysis** for expression authenticity
-- **Lip movement & compression** tracking
-- **Micro-expression detection** via rapid landmark changes
-- **Stress level computation** from weighted behavioral indicators
-- **ML-based deception prediction** (Random Forest, SVM, Logistic Regression, MLP)
-- **Calibration mode** for individual baseline establishment
-- **Futuristic dark HUD UI** with neon-colored metrics and animated scanlines
-- **CSV session logging** for post-analysis
-- **Dynamic threshold adaptation** based on calibration baseline
+- **Real-time face detection** with 468+ facial landmarks (MediaPipe Face Mesh)
+- **Multi-channel behavioral explainability**:
+  - *Ocular Channel*: Eye Aspect Ratio (EAR), blink anomalies, gaze saccades, fixation stability
+  - *Myofacial Tension Channel*: Eyebrow furrowing, lip compression, jaw clench, facial tension
+  - *Micro-Dynamics Channel*: Micro-expression burst detection (<200ms) and bilateral facial asymmetry deltas
+  - *Autonomic Channel*: Remote photoplethysmography (forehead pulse rPPG estimation via optical FFT)
+- **Structured Elicitation Protocols** (inspired by advanced deception elicitation benchmarks):
+  - *Alibi Investigation Protocol*: Alibi declaration, witness corroboration, peripheral details, and reverse-chronology recall
+  - *Standard Polygraph Protocol*: Baseline factual questions, control comparison questions, critical target probes
+  - *Cognitive Load Protocol*: Dual-task load questions designed to elevate behavioral leakage
+- **Scientific Evaluation Suite** (`training/evaluate_model.py`):
+  - Balanced Accuracy, Cohen's Kappa, Brier Score Loss, Expected Calibration Error (ECE)
+  - Wilson Score 95% Confidence Intervals for Accuracy, Precision, Recall, Specificity
+  - Threshold sweep operating characteristics & automated JSON evaluation export
+- **Automated Audit Reporting** (`modules/report_generator.py`):
+  - Generates comprehensive post-session Markdown audit reports (`logs/session_report_*.md`) and structured JSON summaries (`logs/session_summary_*.json`)
+- **Futuristic Dark HUD UI**:
+  - Real-time animated polygraph wave, question status banner, neon-colored metrics, confidence intervals, and 4-channel anomaly mini-gauges
+- **Comprehensive Automated Test Suite** (`tests/`):
+  - Unit and integration tests covering model inference, explainability, elicitation, polygraph, and reporting
 
 ---
 
@@ -34,79 +39,86 @@ indicators from facial behavior patterns.
 
 ```
 lie_detection_system/
-├── main.py                         # Main application entry point
-├── config.py                       # All configuration constants
+├── main.py                         # Main application entry point & camera HUD loop
+├── config.py                       # System configuration constants & color palette
 ├── requirements.txt                # Python dependencies
-├── README.md                       # This file
+├── README.md                       # Comprehensive system documentation
 │
 ├── modules/                        # Core analysis modules
 │   ├── __init__.py                 # Package exports
 │   ├── face_detector.py            # MediaPipe face detection & landmarks
 │   ├── blink_detector.py           # Eye blink detection (EAR method)
-│   ├── movement_tracker.py         # Head pose & gaze tracking
+│   ├── movement_tracker.py         # Head pose (pitch/yaw/roll) & gaze tracking
 │   ├── micro_expression.py         # Micro-expression & symmetry analysis
 │   ├── stress_analyzer.py          # Composite stress computation
-│   ├── feature_extractor.py        # ML feature vector assembly
-│   ├── ml_model.py                 # Deception prediction model
+│   ├── feature_extractor.py        # 22-dimensional feature vector assembly
+│   ├── ml_model.py                 # Calibrated deception model & confidence intervals
+│   ├── explainability.py           # 4-channel behavioral anomaly decomposition
+│   ├── elicitation_protocol.py     # Structured interview protocols (Alibi, Polygraph)
+│   ├── polygraph_analyzer.py       # Forehead optical rPPG pulse & waveform history
+│   ├── voice_analyzer.py           # Background question speech recognition
 │   ├── hud_renderer.py             # Futuristic HUD overlay renderer
 │   ├── calibration.py              # Baseline calibration manager
-│   └── session_logger.py           # CSV logging
+│   ├── session_logger.py           # Session CSV logging & audit report dispatch
+│   └── report_generator.py         # Markdown and JSON session audit generator
 │
-├── training/                       # ML model training
-│   ├── train_model.py              # Training script (multiple models)
-│   └── evaluate_model.py           # Model evaluation & metrics
+├── training/                       # ML model training & evaluation
+│   ├── train_model.py              # ML model training script (Random Forest, SVM, etc.)
+│   ├── evaluate_model.py           # Scientific evaluation suite with Wilson CIs & ECE
+│   ├── collect_data.py             # Interactive webcam data collection script
+│   └── process_videos.py           # Video file batch feature extraction
 │
-├── models/                         # Saved ML models (.pkl)
-├── logs/                           # Session CSV logs
-├── data/                           # Training datasets
-│   └── sample_features.csv         # Generated after training
+├── tests/                          # Automated test suite
+│   ├── test_ml_model.py            # Model inference, smoothing & fallback tests
+│   ├── test_explainability.py      # Channel attribution & evidence decomposition
+│   ├── test_elicitation.py         # Question protocols & lifecycle tests
+│   ├── test_polygraph.py           # rPPG pulse estimation tests
+│   ├── test_report_generator.py    # Report synthesis & schema validation tests
+│   └── test_scientific_evaluation.py # Wilson score & calibration error tests
 │
-└── docs/
-    └── ml_pipeline.md              # ML pipeline documentation
+├── models/                         # Saved ML models (.pkl) & scalers
+├── logs/                           # Session CSV logs, Markdown & JSON reports
+└── data/                           # Training datasets
 ```
 
 ---
 
-## 🚀 Installation Guide
+## 🚀 Installation & Quick Start
 
-### Prerequisites
-- Python 3.8 or higher
-- Webcam (built-in or USB)
+### 1. Prerequisites
+- Python 3.10 or higher
+- Webcam and microphone
 - Windows / macOS / Linux
 
-### Step 1: Clone or Download
-```bash
-cd lie_detection_system
-```
-
-### Step 2: Create Virtual Environment (recommended)
-```bash
+### 2. Environment Setup
+```powershell
+# Create virtual environment
 python -m venv venv
-# Windows
-venv\Scripts\activate
-# macOS/Linux
-source venv/bin/activate
-```
+.\venv\Scripts\activate
 
-### Step 3: Install Dependencies
-```bash
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-### Step 4: (Optional) Train ML Model
-```bash
-# Train with synthetic data (Random Forest default)
-python training/train_model.py
-
-# Train with different model
-python training/train_model.py --model svm
-python training/train_model.py --model logistic
-python training/train_model.py --model neural_net
-python training/train_model.py --model gradient_boost
+### 3. Run the Test Suite
+Ensure all components are validated:
+```powershell
+pytest -v tests
 ```
 
-### Step 5: Run the System
-```bash
+### 4. Train the ML Model
+```powershell
+python training/train_model.py
+```
+
+### 5. Evaluate the Model Scientifically
+```powershell
+python training/evaluate_model.py
+```
+Outputs point estimates with 95% Wilson confidence intervals, Cohen's Kappa, Brier score, and exports `training/evaluation_report.json`.
+
+### 6. Run the Application
+```powershell
 python main.py
 ```
 
@@ -115,64 +127,29 @@ python main.py
 ## ⌨️ Keyboard Controls
 
 | Key | Action |
-|-----|--------|
-| `Q` | Quit the application |
-| `S` | Save session logs to CSV |
-| `C` | Start/restart calibration |
-| `R` | Reset all analysis data |
-| `M` | Toggle mesh visibility |
+|:---:|:---|
+| `Q` | **Quit** the application |
+| `SPACE` | **Start / Advance Protocol Question** (Cycles from question to question) |
+| `P` | **Cycle Elicitation Protocol** (*Alibi Investigation* ⇄ *Standard Polygraph* ⇄ *Cognitive Load*) |
+| `S` | **Save Session Data** (Exports CSV log, Markdown audit report, and JSON summary) |
+| `C` | **Start / Restart Calibration** (Neutral face baseline calibration) |
+| `R` | **Reset** all analyzers, trackers, and histories |
+| `M` | **Toggle Mesh** visibility on/off |
+| `T` | **Record Question via Microphone** (Voice speech-to-text recognition) |
 
 ---
 
-## 📊 Analyzed Metrics
+## 🔬 Scientific Evaluation & Limitations
 
-| Metric | Description |
-|--------|-------------|
-| **Blink Rate** | Blinks per minute (normal: 15-20) |
-| **Eye Aspect Ratio** | Eye openness measurement |
-| **Gaze Stability** | How steady the eye gaze is |
-| **Head Movement** | Overall head motion magnitude |
-| **Nervous Score** | Composite fidgeting measurement |
-| **Face Symmetry** | Left-right facial symmetry (%) |
-| **Lip Compression** | Lip tightness indicator |
-| **Brow Tension** | Eyebrow lowering/furrowing |
-| **Micro-Expressions** | Count of rapid facial changes |
-| **Jaw Clench** | Jaw tightness indicator |
-| **Facial Tension** | Overall facial stress level |
-| **Stress Level** | LOW / MEDIUM / HIGH composite |
-| **Deception Probability** | Estimated deception likelihood |
-| **Truth Probability** | Estimated truthfulness likelihood |
-| **Confidence** | Prediction stability score |
+1. **Behavioral Proxy Correlation**: This system measures physiological and behavioral reactivity (blinking frequency, saccades, facial asymmetry deltas, and optical pulse changes). Elevated stress or cognitive effort does **not** equal deception.
+2. **Confidence Intervals**: All scientific evaluations report 95% Wilson score intervals to prevent reporting overconfident point estimates.
+3. **Probability Calibration**: The model measures Expected Calibration Error (ECE) and Brier scores to ensure probabilities reflect empirical risk rather than uncalibrated classification margins.
+4. **Independent Validation**: Without independent, ground-truth forensic datasets from real-world high-stakes scenarios, automated deception detection remains unvalidated for definitive assessments.
 
 ---
 
-## 🧠 How It Works
+## ⚖️ Ethics & Privacy
 
-1. **Calibration** (10 seconds): Establishes your baseline behavior
-2. **Detection**: Compares current behavior against your baseline
-3. **Analysis**: 22 behavioral features extracted per frame
-4. **Prediction**: ML model (or heuristic) estimates deception probability
-5. **Display**: Real-time HUD shows all metrics with color-coded indicators
-
----
-
-## 📈 Improving Accuracy
-
-1. Collect real labeled truth/deception data for training
-2. Extend calibration duration for better baselines
-3. Add voice stress analysis (pitch, tempo, tremor)
-4. Implement temporal models (LSTM/GRU) for sequence analysis
-5. Use ensemble of multiple models
-6. Add body language analysis via full pose estimation
-7. Integrate speech content analysis
-8. Fine-tune with individual-specific data
-
----
-
-## ⚖️ Ethical Notice
-
-- This project is for **learning and research only**
-- Facial-behavior-based lie detection is **not scientifically reliable**
-- Do NOT use results for any real-world decision making
-- Always respect privacy and obtain consent before recording
-- The system shows **behavioral indicators**, not definitive truth
+- **Informed Consent**: Never record or analyze an individual without their explicit, prior consent.
+- **Privacy Minimization**: Raw video streams are processed in-memory and not uploaded to remote servers.
+- **Audit Trails**: Post-session reports (`logs/session_report_*.md`) preserve transparent disclaimers and multi-channel evidence rationale to ensure accountable usage.

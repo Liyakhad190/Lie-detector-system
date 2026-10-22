@@ -67,12 +67,15 @@ class BlinkDetector:
             self._consec_frames = 0
         self._blink_in_progress = self._avg_ear < threshold
 
+        _, ear_std = self.get_ear_stats()
         return {
             "blink_detected": blink_detected,
             "blink_in_progress": self._blink_in_progress,
             "left_ear": self._left_ear,
             "right_ear": self._right_ear,
             "avg_ear": self._avg_ear,
+            "ear_std": ear_std,                            # rolling EAR std
+            "blink_rate_change": self.get_blink_rate_change(),  # ratio vs baseline
             "total_blinks": self._total_blinks,
             "blink_rate_per_min": self.get_blink_rate(),
             "ear_threshold": threshold,

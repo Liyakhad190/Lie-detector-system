@@ -30,9 +30,11 @@ class FeatureExtractor:
 
         # Blink features
         features[0] = blink_data.get("blink_rate_per_min", 0)
-        features[1] = blink_data.get("blink_rate_per_min", 15) / 15.0  # ratio
+        # blink_rate_change: ratio of current blink rate to baseline (1.0 = no change)
+        features[1] = blink_data.get("blink_rate_change", 1.0)
         features[2] = blink_data.get("avg_ear", 0.3)
-        features[3] = 0.0  # EAR std (computed externally)
+        # ear_std: rolling std of EAR over recent frames (was hardcoded to 0.0 — fixed)
+        features[3] = blink_data.get("ear_std", 0.0)
 
         # Gaze features
         features[4] = movement_data.get("gaze_h_std", 0)

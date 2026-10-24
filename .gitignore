@@ -18,8 +18,12 @@ htmlcov/
 
 # Logs & generated session data
 *.log
-logs/*.csv
+logs/*
+!logs/.gitkeep
 reports/*.pdf
+reports/*
+!reports/.gitkeep
+
 
 # IDE & OS files
 .vscode/

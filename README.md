@@ -153,3 +153,22 @@ python main.py
 - **Informed Consent**: Never record or analyze an individual without their explicit, prior consent.
 - **Privacy Minimization**: Raw video streams are processed in-memory and not uploaded to remote servers.
 - **Audit Trails**: Post-session reports (`logs/session_report_*.md`) preserve transparent disclaimers and multi-channel evidence rationale to ensure accountable usage.
+
+---
+
+## 📜 Acknowledgements & Third-Party Attribution
+
+This repository includes a reference implementation under [`reference/lie-detector-main/`](reference/lie-detector-main/):
+
+- **Project**: *On-Policy Deception Framework* (Evaluating and eliciting deceptive behavior in LLMs)
+- **Author**: Jack Hopkins & Contributors
+- **Repository**: [https://github.com/JackHopkins/lie-detector](https://github.com/JackHopkins/lie-detector)
+- **License**: MIT License (included in [`reference/lie-detector-main/LICENSE`](reference/lie-detector-main/LICENSE))
+
+The elicitation protocols (alibi investigation, cognitive load, reverse chronology) and scientific evaluation methodology in this real-time computer-vision system were inspired by the benchmark designs of the above work.
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the project root or components for details.

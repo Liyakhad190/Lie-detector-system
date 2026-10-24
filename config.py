@@ -17,6 +17,13 @@ CAMERA_WIDTH = 1280               # Capture width
 CAMERA_HEIGHT = 720               # Capture height
 TARGET_FPS = 30                   # Target frame rate
 
+# Bounded retry for transient frame-read failures.
+# After CAMERA_READ_RETRY_LIMIT consecutive failures the loop exits cleanly.
+# Between retries the loop sleeps CAMERA_READ_RETRY_DELAY_MS milliseconds to
+# avoid busy-waiting.  The counter resets to 0 after any successful read.
+CAMERA_READ_RETRY_LIMIT = 5       # Max consecutive failed cap.read() calls
+CAMERA_READ_RETRY_DELAY_MS = 50   # Sleep (ms) between failed read attempts
+
 # ──────────────────────────────────────────────────────────────────────────
 # MEDIAPIPE FACE MESH SETTINGS
 # ──────────────────────────────────────────────────────────────────────────
@@ -174,10 +181,14 @@ ADAPTATION_RATE = 0.02            # How fast thresholds adapt
 BASELINE_WEIGHT = 0.7             # Weight of baseline in adapted threshold
 
 # ──────────────────────────────────────────────────────────────────────────
-# DISCLAIMER
+# DISCLAIMER & RESEARCH ETHICS NOTICE
 # ──────────────────────────────────────────────────────────────────────────
 DISCLAIMER = (
     "EDUCATIONAL & EXPERIMENTAL SYSTEM ONLY | "
+    "Output is a behavioral-anomaly score, NOT a lie verdict | "
     "NOT scientifically validated for lie detection | "
-    "Results are behavioral estimates, NOT definitive truth assessments"
+    "Results are behavioral estimates, NOT definitive truth assessments | "
+    "Lighting, movement, fatigue, stress & anxiety affect measured signals | "
+    "Do NOT use to accuse, rank, or make consequential decisions about individuals"
 )
+

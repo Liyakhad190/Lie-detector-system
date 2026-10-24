@@ -163,7 +163,7 @@ def evaluate_jobs_from_file(jobs_file: str, api_key: str, data_root: str):
 
 def main():
     # Configuration
-    api_key = "876b395e972814ee915c5c2cf1b645dc176ccf159b371bf48feb4c801ffe8cda"
+    api_key = os.environ.get("TOGETHER_API_KEY", "")
     data_root = "/Users/dipikakhullar/Desktop/lie_detector_clone/lie-detector/.data/openai/gpt_oss_120b_limited"
     
     # Use command line argument for jobs file

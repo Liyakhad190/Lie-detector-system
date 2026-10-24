@@ -44,6 +44,7 @@ class SessionLogger:
             return
         self._last_log_time = time.time()
 
+        band = prediction.get("prediction_stability_band") or prediction.get("confidence_interval", (0.0, 0.0))
         entry = {
             "timestamp": f"{timestamp:.3f}",
             "face_id": face_id,
@@ -64,6 +65,10 @@ class SessionLogger:
             "micro_expressions": micro_data.get("micro_expression_count", 0),
             "stress_score": f"{stress_data.get('stress_score', 0):.3f}",
             "stress_level": stress_data.get("stress_level", "N/A"),
+            "anomaly_score": f"{prediction.get('deception_probability', 0):.3f}",
+            "stability_score": f"{prediction.get('confidence', 0):.3f}",
+            "stability_band_lower": f"{band[0]:.3f}",
+            "stability_band_upper": f"{band[1]:.3f}",
             "deception_prob": f"{prediction.get('deception_probability', 0):.3f}",
             "truth_prob": f"{prediction.get('truth_probability', 0):.3f}",
             "confidence": f"{prediction.get('confidence', 0):.3f}",

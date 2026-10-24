@@ -67,9 +67,9 @@ class LieDetectionSystem:
         print(" Educational & Experimental Use Only")
         print("=" * 60)
 
-        # Initialize camera
+        # Initialize camera — use DirectShow backend (MSMF is broken on this system)
         print("[INIT] Opening camera...")
-        self.cap = cv2.VideoCapture(config.CAMERA_INDEX)
+        self.cap = cv2.VideoCapture(config.CAMERA_INDEX, cv2.CAP_DSHOW)
         if not self.cap.isOpened():
             raise RuntimeError("Could not open webcam. Check camera connection.")
 
@@ -79,6 +79,7 @@ class LieDetectionSystem:
         actual_w = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         actual_h = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         print(f"[INIT] Camera resolution: {actual_w}x{actual_h}")
+
 
         # Initialize all modules
         print("[INIT] Loading modules...")
@@ -91,13 +92,16 @@ class LieDetectionSystem:
         self.feature_extractor = FeatureExtractor()
         self.model = DeceptionModel()
         self.hud = HUDRenderer(actual_w, actual_h)
+        cv2.namedWindow("Deception Analysis System", cv2.WINDOW_NORMAL)
+        cv2.resizeWindow("Deception Analysis System", actual_w, actual_h)
+        cv2.waitKey(1)
         self.calibration = CalibrationManager()
         self.logger = SessionLogger()
         self.voice_analyzer = VoiceAnalyzer()
         self.protocol_manager = ElicitationProtocolManager("ALIBI_INVESTIGATION")
 
         # State
-        self.show_mesh = True
+        self.show_mesh = False
         self.running = True
         self._fps = 0.0
         self._frame_times = []
@@ -169,7 +173,7 @@ class LieDetectionSystem:
             frame,
             face.landmarks,
             stress_data.get("stress_score", 0.0),
-            0.0
+            deception_prob=None
         )
 
         # Step 7: Calibration sample or prediction with explainability & autonomic fusion
@@ -182,7 +186,8 @@ class LieDetectionSystem:
                 "deception_probability": 0.0,
                 "truth_probability": 1.0,
                 "confidence": 0.0,
-                "confidence_interval": (0.0, 0.0),
+                "prediction_stability_band": (0.0, 0.0),
+                "confidence_interval": (0.0, 0.0),        # deprecated alias
                 "label": "CALIBRATING...",
                 "label_color": "calibration",
                 "method": "CALIBRATION",
@@ -217,8 +222,8 @@ class LieDetectionSystem:
             question=current_q_text
         )
 
-        # Update Polygraph with final prediction probability for chart
-        polygraph.history["deception"].append(prediction.get("deception_probability", 0.0))
+        # Update Polygraph with final prediction probability for chart (once per frame)
+        polygraph.add_deception(prediction.get("deception_probability", 0.0))
         
         # Buffer for interview mode
         if self.interview_state == 1:
@@ -321,15 +326,65 @@ class LieDetectionSystem:
         }
 
     def run(self):
-        """Main application loop."""
+        """Main application loop with bounded camera-read retry on transient failures.
+
+        Retry policy (configurable via config.py):
+          - On cap.read() failure: increment consecutive-failure counter,
+            sleep config.CAMERA_READ_RETRY_DELAY_MS / 1000.0 seconds via
+            time.sleep(), then retry.
+          - After config.CAMERA_READ_RETRY_LIMIT consecutive failures: log a
+            [CAMERA] error and exit cleanly via shutdown().
+          - After any successful read: reset the consecutive-failure counter to 0.
+          - Invalid / None frames are never passed downstream.
+
+        Note: this retry logic was validated with unit-test mocks only.
+        Actual webcam recovery depends on hardware and OS driver behaviour.
+        """
         print("[RUN] Starting main loop...")
+        _consecutive_failures = 0
+        _retry_limit = config.CAMERA_READ_RETRY_LIMIT
+        _retry_delay_ms = config.CAMERA_READ_RETRY_DELAY_MS
 
         try:
             while self.running:
                 ret, frame = self.cap.read()
-                if not ret:
-                    print("[ERROR] Failed to read frame from camera.")
-                    break
+
+                if not ret or frame is None:
+                    _consecutive_failures += 1
+                    if _consecutive_failures == 1:
+                        print(
+                            f"[CAMERA] Frame read failed "
+                            f"(attempt {_consecutive_failures}/{_retry_limit}). "
+                            "Retrying..."
+                        )
+                    else:
+                        print(
+                            f"[CAMERA] Frame read failed "
+                            f"(attempt {_consecutive_failures}/{_retry_limit})."
+                        )
+
+                    if _consecutive_failures >= _retry_limit:
+                        print(
+                            f"[CAMERA] {_retry_limit} consecutive frame failures. "
+                            "Camera may be disconnected. Exiting."
+                        )
+                        break
+
+                    # time.sleep() avoids busy-waiting and works correctly
+                    # in headless environments and unit tests where an OpenCV
+                    # window is not guaranteed to exist.
+                    # cv2.waitKey() is kept only in the normal frame loop below
+                    # where a display window is active.
+                    time.sleep(_retry_delay_ms / 1000.0)
+                    continue
+
+                # Successful read: reset failure counter
+                if _consecutive_failures > 0:
+                    print(
+                        f"[CAMERA] Frame recovered after "
+                        f"{_consecutive_failures} failure(s)."
+                    )
+                _consecutive_failures = 0
 
                 # Mirror the frame for natural interaction
                 frame = cv2.flip(frame, 1)
@@ -339,15 +394,13 @@ class LieDetectionSystem:
                 # Detect faces
                 faces = self.face_detector.detect(frame)
 
-                # Draw landmarks on frame
-                for face in faces:
-                    if self.show_mesh:
+                # Draw landmarks on frame only if mesh toggle is ON (default OFF)
+                if self.show_mesh:
+                    for face in faces:
                         self.face_detector.draw_landmarks(
                             frame, face,
                             draw_mesh=True, draw_contour=True, draw_iris=True
                         )
-                    else:
-                        self.face_detector.draw_key_landmarks(frame, face)
 
                 # Process each face through analysis pipeline
                 faces_data = []
@@ -356,7 +409,7 @@ class LieDetectionSystem:
                         result = self._process_face(face, frame)
                         faces_data.append(result)
                     except Exception as e:
-                        print(f"[ERROR] Face processing: {e}")
+                        print(f"[FACE] Processing error for face_id={face.face_id}: {e}")
 
                 # Determine active question text
                 active_q = self.protocol_manager.get_current_question()
@@ -395,6 +448,7 @@ class LieDetectionSystem:
             traceback.print_exc()
         finally:
             self.shutdown()
+
 
     def shutdown(self):
         """Clean shutdown of all resources."""

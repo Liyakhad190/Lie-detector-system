@@ -116,8 +116,10 @@ class HUDRenderer:
         dim = self._colors["text_secondary"]
 
         # System title
-        cv2.putText(frame, "DECEPTION ANALYSIS SYSTEM v2.0",
-                    (15, y), cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 1, cv2.LINE_AA)
+        cv2.putText(frame, "BEHAVIORAL ANOMALY ANALYSIS SYSTEM v2.0",
+                    (15, y - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.48, color, 1, cv2.LINE_AA)
+        cv2.putText(frame, "EXPERIMENTAL BEHAVIORAL SCORE (NOT A LIE VERDICT)",
+                    (15, y + 10), cv2.FONT_HERSHEY_SIMPLEX, 0.30, self._colors["warning"], 1, cv2.LINE_AA)
 
         # Animated pulse dot
         pulse = abs(math.sin(self._frame_count * 0.1))
@@ -145,7 +147,7 @@ class HUDRenderer:
     def _draw_bottom_bar(self, frame: np.ndarray):
         """Draw bottom disclaimer bar."""
         h, w = frame.shape[:2]
-        y = h - 20
+        y = h - 16
         cv2.line(frame, (0, h - config.BOTTOM_BAR_HEIGHT),
                  (w, h - config.BOTTOM_BAR_HEIGHT),
                  self._colors["primary"], 1, cv2.LINE_AA)
@@ -160,9 +162,12 @@ class HUDRenderer:
                     cv2.FONT_HERSHEY_SIMPLEX, 0.35,
                     self._colors["warning"], 1, cv2.LINE_AA)
 
-        # Controls hint
+        # Controls hint & Caveat notice
         cv2.putText(frame, "[Q] Quit  [S] Save  [C] Calibrate  [R] Reset",
-                    (15, h - 40), cv2.FONT_HERSHEY_SIMPLEX, 0.35,
+                    (15, h - 38), cv2.FONT_HERSHEY_SIMPLEX, 0.35,
+                    self._colors["text_secondary"], 1, cv2.LINE_AA)
+        cv2.putText(frame, "CAVEAT: Lighting, movement, fatigue, stress & anxiety alter signals. Never use to accuse or rank individuals.",
+                    (280, h - 38), cv2.FONT_HERSHEY_SIMPLEX, 0.30,
                     self._colors["text_secondary"], 1, cv2.LINE_AA)
 
     def _draw_scanlines(self, frame: np.ndarray):
@@ -333,6 +338,10 @@ class HUDRenderer:
         x = 20
         y = config.TOP_BAR_HEIGHT + 40
 
+        # Subtitle distinguishing anomaly score from lie verdict
+        cv2.putText(frame, "BEHAVIORAL ANOMALY ESTIMATION (NOT A LIE VERDICT)", (x, y - 18),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.32, self._colors["warning"], 1, cv2.LINE_AA)
+
         # Prediction label with pulsing effect
         pulse = 0.7 + 0.3 * abs(math.sin(self._frame_count * 0.05))
         label_color_val = tuple(int(c * pulse) for c in color)
@@ -340,8 +349,8 @@ class HUDRenderer:
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, label_color_val, 2, cv2.LINE_AA)
 
         y += 35
-        # Truth bar
-        cv2.putText(frame, "TRUTH", (x, y),
+        # Baseline Congruence bar
+        cv2.putText(frame, "BASELINE", (x, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.4,
                     self._colors["text_secondary"], 1, cv2.LINE_AA)
         bar_x = x + 80
@@ -357,8 +366,8 @@ class HUDRenderer:
                     cv2.FONT_HERSHEY_SIMPLEX, 0.4, self._colors["truth"], 1, cv2.LINE_AA)
 
         y += 25
-        # Deception bar
-        cv2.putText(frame, "DECEPT", (x, y),
+        # Behavioral Anomaly bar
+        cv2.putText(frame, "ANOMALY", (x, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.4,
                     self._colors["text_secondary"], 1, cv2.LINE_AA)
         cv2.rectangle(frame, (bar_x, y - 12), (bar_x + bar_w, y - 12 + bar_h),
@@ -371,9 +380,10 @@ class HUDRenderer:
                     cv2.FONT_HERSHEY_SIMPLEX, 0.4, self._colors["deception"], 1, cv2.LINE_AA)
 
         y += 25
-        # Confidence and CI
-        ci = pred.get("confidence_interval", (0.0, 0.0))
-        cv2.putText(frame, f"CONFIDENCE: {confidence:.0%} [CI: {ci[0]:.0%}-{ci[1]:.0%}]", (x, y),
+        # Prediction stability band — NOT a statistical CI for deception probability.
+        # Measures temporal consistency of the model output over the last 15 frames.
+        band = pred.get("prediction_stability_band") or pred.get("confidence_interval", (0.0, 0.0))
+        cv2.putText(frame, f"STABILITY: {confidence:.0%} [BAND: {band[0]:.0%}-{band[1]:.0%}]", (x, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.38,
                     self._colors["secondary"], 1, cv2.LINE_AA)
 
@@ -484,10 +494,12 @@ class HUDRenderer:
         cv2.putText(frame, "PHYSIOLOGICAL & STRESS POLYGRAPH", (x + 10, y + 20),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.4, self._colors["primary"], 1, cv2.LINE_AA)
                     
-        # Heart rate value
+        # Heart rate value (optical rPPG)
         hr = polygraph_data.get("hr_bpm", 0)
-        cv2.putText(frame, f"HR: {hr:.1f} BPM", (x + chart_w - 120, y + 20),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, self._colors["success"], 1, cv2.LINE_AA)
+        is_valid = polygraph_data.get("is_valid_hr", False)
+        hr_text = f"HR: {hr:.0f} BPM" if is_valid else "HR: OPTICAL rPPG..."
+        cv2.putText(frame, hr_text, (x + chart_w - 145, y + 20),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.38, self._colors["success"], 1, cv2.LINE_AA)
         
         history = polygraph_data.get("history", {})
         if not history:
@@ -524,7 +536,7 @@ class HUDRenderer:
         # Draw legend
         cv2.putText(frame, "HR", (x + 10, y + chart_h - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.35, self._colors["success"], 1, cv2.LINE_AA)
         cv2.putText(frame, "STRESS", (x + 50, y + chart_h - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.35, self._colors["danger"], 1, cv2.LINE_AA)
-        cv2.putText(frame, "DECEPTION", (x + 110, y + chart_h - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.35, self._colors["warning"], 1, cv2.LINE_AA)
+        cv2.putText(frame, "ANOMALY", (x + 110, y + chart_h - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.35, self._colors["warning"], 1, cv2.LINE_AA)
 
     def _draw_interview_status(self, frame: np.ndarray, state: int, current_question: str):
         """Draw the current interview mode state."""
@@ -534,15 +546,15 @@ class HUDRenderer:
         x = 20
         
         if state == 0:
-            text = "INTERVIEW: IDLE (Press T to ask question, SPACE to record answer)"
+            text = "INTERVIEW: IDLE (Press SPACEBAR to start questioning, or T for voice question)"
             color = self._colors["text_primary"]
             pulse = 1.0
         elif state == 1:
-            text = "INTERVIEW: RECORDING ANSWER (Press SPACE to end and analyze)"
+            text = "INTERVIEW: QUESTION ACTIVE (Answer now, then press SPACEBAR for next)"
             pulse = 0.5 + 0.5 * abs(math.sin(self._frame_count * 0.1))
             color = tuple(int(c * pulse) for c in self._colors["danger"])
         else: # state == 2
-            text = "INTERVIEW: VERDICT RENDERED (Press SPACE to reset)"
+            text = "INTERVIEW: VERDICT RENDERED (Press SPACEBAR to start new interview)"
             color = self._colors["primary"]
             pulse = 1.0
             
@@ -579,7 +591,7 @@ class HUDRenderer:
         cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0, frame)
         
         # Text
-        cv2.putText(frame, "FINAL ANSWER VERDICT", (x + 20, y + 40),
+        cv2.putText(frame, "RESEARCH PROTOCOL SUMMARY", (x + 20, y + 40),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, self._colors["text_secondary"], 1, cv2.LINE_AA)
         
         if question:
@@ -597,8 +609,8 @@ class HUDRenderer:
         ty = y + 160
         cv2.putText(frame, label, (tx, ty), cv2.FONT_HERSHEY_SIMPLEX, font_scale, color, thickness, cv2.LINE_AA)
         
-        # Confidence
-        conf_text = f"CONFIDENCE: {conf:.0%}"
+        # Prediction Stability
+        conf_text = f"PREDICTION STABILITY: {conf:.0%}"
         text_size = cv2.getTextSize(conf_text, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)[0]
         tx = x + (vw - text_size[0]) // 2
         ty = y + 230
@@ -607,9 +619,11 @@ class HUDRenderer:
         # Details
         dec_prob = verdict.get("deception_probability", 0)
         tru_prob = verdict.get("truth_probability", 0)
-        details = f"Deception Score: {dec_prob:.2f} | Truth Score: {tru_prob:.2f}"
-        cv2.putText(frame, details, (x + 20, y + vh - 20),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, self._colors["text_secondary"], 1, cv2.LINE_AA)
+        details = f"Anomaly Index: {dec_prob:.2f} | Baseline Congruence: {tru_prob:.2f}"
+        cv2.putText(frame, "Behavioral anomaly score only. NOT a lie verdict. Do not use for accusation or evaluation.",
+                    (x + 20, y + vh - 40), cv2.FONT_HERSHEY_SIMPLEX, 0.38, self._colors["warning"], 1, cv2.LINE_AA)
+        cv2.putText(frame, details, (x + 20, y + vh - 15),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, self._colors["text_secondary"], 1, cv2.LINE_AA)
 
     # ── Color helper methods ──────────────────────────────────────────
 

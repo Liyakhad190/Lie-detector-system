@@ -1,0 +1,31 @@
+{
+  "model_type": "random_forest",
+  "model_category": "EXPERIMENTAL_TASK_CLASSIFICATION",
+  "data_source": "C:\\Users\\Nazeera Begum\\AppData\\Local\\Temp\\pytest-of-Nazeera Begum\\pytest-219\\test_training_preserves_partic0\\split_test.csv",
+  "data_provenance": "REAL_HUMAN",
+  "dataset_sha256": "e696f244fc43cd6c99ff0d39270973bc2bf06f07d85fe43aa0a20b2cff142373",
+  "random_seed": 42,
+  "split_type": "SUBJECT_INDEPENDENT_GROUP_SPLIT",
+  "label_protocol": "UNKNOWN",
+  "label_verified": false,
+  "intended_interpretation": "Measures behavioral divergence between instructed experimental conditions (e.g., prompt compliance). Reflects task-directed compliance differences, NOT verified lie detection.",
+  "limitations": [
+    "Labels represent instructed experimental tasks (label_verified=False), NOT verified deception",
+    "Non-deceptive emotional stress, cognitive load, or camera anxiety can trigger behavioral anomalies",
+    "Lighting, head movement, and camera angle introduce signal variance",
+    "Prohibited for punitive, screening, ranking, or consequential decision-making"
+  ],
+  "unique_participants_count": 4,
+  "unique_sessions_count": 0,
+  "train_participants": [
+    "P_1",
+    "P_3",
+    "P_4"
+  ],
+  "test_participants": [
+    "P_2"
+  ],
+  "train_samples": 30,
+  "test_samples": 10,
+  "trained_at": "2026-10-24T22:28:37.174238"
+}

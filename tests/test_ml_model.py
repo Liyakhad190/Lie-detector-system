@@ -31,6 +31,7 @@ def test_model_prediction_shape_and_keys():
     assert "deception_probability" in result
     assert "truth_probability" in result
     assert "confidence" in result
+    assert "prediction_stability_band" in result
     assert "confidence_interval" in result
     assert "label" in result
     assert "risk_tier" in result
@@ -40,9 +41,11 @@ def test_model_prediction_shape_and_keys():
     assert 0.0 <= result["deception_probability"] <= 1.0
     assert 0.0 <= result["truth_probability"] <= 1.0
     assert 0.0 <= result["confidence"] <= 1.0
-    ci = result["confidence_interval"]
-    assert len(ci) == 2
-    assert ci[0] <= ci[1]
+    band = result["prediction_stability_band"]
+    assert len(band) == 2
+    assert band[0] <= band[1]
+    # Verify backward-compatibility alias
+    assert result["confidence_interval"] == band
 
 
 def test_model_handles_invalid_or_missing_features():

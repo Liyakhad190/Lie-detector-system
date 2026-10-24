@@ -82,8 +82,10 @@ class SessionReportGenerator:
             "overall_verdict": overall_verdict,
             "sample_count": total_frames,
             "aggregate_metrics": {
-                "mean_deception_probability": round(mean_prob, 3),
-                "peak_deception_probability": round(max_prob, 3),
+                "mean_behavioral_anomaly_score": round(mean_prob, 3),
+                "peak_behavioral_anomaly_score": round(max_prob, 3),
+                "mean_deception_probability": round(mean_prob, 3),  # backward-compat alias
+                "peak_deception_probability": round(max_prob, 3),  # backward-compat alias
                 "mean_stress_score": round(mean_stress, 3),
                 "mean_blink_rate_bpm": round(mean_blink, 1),
                 "mean_heart_rate_bpm": round(mean_hr, 1)
@@ -105,13 +107,14 @@ class SessionReportGenerator:
             "",
             "> ⚠️ **SCIENTIFIC & LEGAL DISCLAIMER**",
             f"> {config.DISCLAIMER}",
+            "> This system is an experimental research tool. Measured facial, ocular, and physiological signals indicate autonomic reactivity and cognitive load, NOT definitive truth or deception. Results must never be used as evidence of lying.",
             "",
             "---",
             "",
             "## 1. Executive Summary",
             f"- **Overall Assessment:** **{overall_verdict}**",
-            f"- **Average Anomaly Index:** `{mean_prob:.3f}` (Scale: 0.0 - 1.0)",
-            f"- **Peak Anomaly Index:** `{max_prob:.3f}`",
+            f"- **Average Behavioral Anomaly Score:** `{mean_prob:.3f}` (Scale: 0.0 - 1.0)",
+            f"- **Peak Behavioral Anomaly Score:** `{max_prob:.3f}`",
             f"- **Mean Stress Score:** `{mean_stress:.3f}`",
             f"- **Recorded Frames:** `{total_frames}`",
             "",

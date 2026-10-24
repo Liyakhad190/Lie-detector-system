@@ -214,7 +214,7 @@ class SimpleLieTrainer:
             learning_rate=1e-5,
             train_on_inputs=False,
             suffix=f"lie-{fold_name}-{int(time.time())}",
-            wandb_api_key="eb7e7a0f5bda2236f62f395c457f0ece7f78f5df"
+            wandb_api_key=os.environ.get("WANDB_API_KEY", "")
         )
         
         job_id = job_response.id
@@ -252,7 +252,7 @@ class SimpleLieTrainer:
 def main():
     # Configuration
     data_root = "/Users/dipikakhullar/Desktop/lie_detector_clone/lie-detector/.data/openai/gpt_oss_120b_limited"
-    api_key = "876b395e972814ee915c5c2cf1b645dc176ccf159b371bf48feb4c801ffe8cda"
+    api_key = os.environ.get("TOGETHER_API_KEY", "")
     
     # Initialize trainer
     trainer = SimpleLieTrainer(data_root, api_key)

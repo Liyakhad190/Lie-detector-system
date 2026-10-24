@@ -21,14 +21,32 @@ class ExplainabilityDecomposer:
     """
     Decomposes multi-modal feature vectors and predictions into
     interpretable diagnostic channels with attribution weights.
+
+    IMPORTANT — Three distinct concepts are used here:
+      1. MEASURED FEATURES: Raw geometric/optical values from the camera
+         (e.g. blink_rate, EAR, gaze_std). These are measured from signal.
+      2. HEURISTIC ANOMALY SCORES: Per-channel scores computed by rule-based
+         thresholds (e.g. blink_rate > 28 -> anomaly). These reflect expert
+         domain intuition, not empirical fitting to labeled deception data.
+      3. MODEL CONTRIBUTIONS: The RandomForest feature_importances_ values
+         that reflect what the model actually learned from training data.
+         These are available separately via the training pipeline.
+
+    The channel scores produced here are HEURISTIC ESTIMATES (category 2).
+    They are NOT model contributions and are NOT validated deception probabilities.
     """
 
+    # Weights assigned manually based on literature review and expert judgment.
+    # These have NOT been derived from empirical fitting to any deception dataset.
+    # Do not present these as scientifically validated channel contributions.
     CHANNEL_WEIGHTS = {
-        "ocular": 0.30,
-        "myofacial": 0.30,
-        "micro_dynamics": 0.25,
-        "autonomic": 0.15
+        "ocular": 0.30,        # manually assigned
+        "myofacial": 0.30,     # manually assigned
+        "micro_dynamics": 0.25, # manually assigned
+        "autonomic": 0.15      # manually assigned
     }
+
+    WEIGHT_BASIS = "MANUALLY_ASSIGNED_DOMAIN_HEURISTIC"
 
     def __init__(self):
         self.feature_names = config.FEATURE_NAMES
@@ -149,10 +167,17 @@ class ExplainabilityDecomposer:
 
         return {
             "composite_anomaly_score": composite_score,
+            # weight_basis: these weights are MANUALLY ASSIGNED domain heuristics,
+            # not derived from empirical fitting to verified deception data.
+            "weight_basis": self.WEIGHT_BASIS,
+            # score_type: all per-channel scores are HEURISTIC ESTIMATES computed
+            # from rule-based thresholds, NOT model feature contributions.
+            "score_type": "HEURISTIC_ESTIMATE",
             "channels": {
                 "ocular": {
                     "score": ocular_score,
                     "weight": self.CHANNEL_WEIGHTS["ocular"],
+                    "weight_basis": self.WEIGHT_BASIS,
                     "metrics": {
                         "blink_rate": blink_rate,
                         "gaze_h_std": gaze_h_std,
@@ -163,6 +188,7 @@ class ExplainabilityDecomposer:
                 "myofacial": {
                     "score": myofacial_score,
                     "weight": self.CHANNEL_WEIGHTS["myofacial"],
+                    "weight_basis": self.WEIGHT_BASIS,
                     "metrics": {
                         "eyebrow_tension": eyebrow_tension,
                         "lip_compression": lip_compression,
@@ -173,6 +199,7 @@ class ExplainabilityDecomposer:
                 "micro_dynamics": {
                     "score": micro_score,
                     "weight": self.CHANNEL_WEIGHTS["micro_dynamics"],
+                    "weight_basis": self.WEIGHT_BASIS,
                     "metrics": {
                         "symmetry_score": face_sym_score,
                         "symmetry_change": face_sym_change,
@@ -183,6 +210,7 @@ class ExplainabilityDecomposer:
                 "autonomic": {
                     "score": autonomic_score,
                     "weight": self.CHANNEL_WEIGHTS["autonomic"],
+                    "weight_basis": self.WEIGHT_BASIS,
                     "metrics": {
                         "estimated_hr": hr_bpm
                     }
@@ -207,11 +235,13 @@ class ExplainabilityDecomposer:
     def _empty_decomposition(self) -> Dict[str, Any]:
         return {
             "composite_anomaly_score": 0.0,
+            "weight_basis": self.WEIGHT_BASIS,
+            "score_type": "HEURISTIC_ESTIMATE",
             "channels": {
-                "ocular": {"score": 0.0, "weight": 0.30, "metrics": {}},
-                "myofacial": {"score": 0.0, "weight": 0.30, "metrics": {}},
-                "micro_dynamics": {"score": 0.0, "weight": 0.25, "metrics": {}},
-                "autonomic": {"score": 0.0, "weight": 0.15, "metrics": {}}
+                "ocular": {"score": 0.0, "weight": 0.30, "weight_basis": self.WEIGHT_BASIS, "metrics": {}},
+                "myofacial": {"score": 0.0, "weight": 0.30, "weight_basis": self.WEIGHT_BASIS, "metrics": {}},
+                "micro_dynamics": {"score": 0.0, "weight": 0.25, "weight_basis": self.WEIGHT_BASIS, "metrics": {}},
+                "autonomic": {"score": 0.0, "weight": 0.15, "weight_basis": self.WEIGHT_BASIS, "metrics": {}}
             },
             "primary_contributor": "None",
             "primary_channel_score": 0.0,

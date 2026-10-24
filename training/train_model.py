@@ -137,17 +137,159 @@ def train_model(model_type: str = "random_forest", data_path: str = None):
         df.to_csv("data/sample_features.csv", index=False)
         print(f"Saved synthetic dataset to data/sample_features.csv")
 
+    # Filter low-quality flagged samples if quality_flag column exists
+    if "quality_flag" in df.columns:
+        n_before = len(df)
+        df = df[df["quality_flag"] == "OK"]
+        n_filtered = n_before - len(df)
+        if n_filtered > 0:
+            print(f"[FILTER] Excluded {n_filtered} low-quality/flagged samples from training.")
+
+    # Validate binary labels (0=Truth, 1=Deception)
+    if "label" not in df.columns:
+        print("[ERROR] Dataset missing 'label' column.")
+        return None
+    valid_mask = df["label"].isin([0, 1])
+    if not valid_mask.all():
+        n_invalid = int((~valid_mask).sum())
+        print(f"[FILTER] Excluded {n_invalid} rows with invalid/unverified labels.")
+        df = df[valid_mask]
+
     features = config.FEATURE_NAMES
+    missing_feats = [f for f in features if f not in df.columns]
+    if missing_feats:
+        print(f"[ERROR] Missing required features: {missing_feats}")
+        return None
+
+    # Filter NaNs or infinite values
+    clean_mask = ~df[features].isna().any(axis=1) & ~np.isinf(df[features]).any(axis=1)
+    if not clean_mask.all():
+        n_nan = int((~clean_mask).sum())
+        print(f"[FILTER] Excluded {n_nan} rows containing NaN or infinite feature values.")
+        df = df[clean_mask]
+
+    if len(df) == 0:
+        print("[ERROR] No valid samples remaining for training.")
+        return None
+
     X = df[features].values
-    y = df["label"].values
+    y = df["label"].values.astype(int)
+
+    if len(np.unique(y)) < 2:
+        print(f"[ERROR] Training requires both Truth (0) and Deception (1) classes. Found: {np.unique(y)}")
+        return None
 
     print(f"Dataset: {len(X)} samples, {X.shape[1]} features")
-    print(f"Class distribution: Truth={sum(y==0)}, Deception={sum(y==1)}")
+    print(f"Class distribution: Truth={int(sum(y==0))}, Deception={int(sum(y==1))}")
 
-    # Split data
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
+    # ── PROVENANCE & MIXED DATA CHECK ───────────────────────────────────────
+    if "data_provenance" in df.columns:
+        provs = df["data_provenance"].dropna().unique()
+        if len(provs) > 1:
+            print(f"[ERROR] Mixed data provenance detected: {list(provs)}.")
+            print("        Synthetic and human data CANNOT be silently mixed. Training aborted.")
+            return None
+
+    data_src = data_path or ("data/real_features.csv" if os.path.exists("data/real_features.csv") else "data/sample_features.csv")
+    is_synthetic = "sample_features" in data_src.lower() or "data_provenance" not in df.columns or (df.get("data_provenance") == "SYNTHETIC").all()
+
+    import hashlib
+    dataset_sha256 = None
+    if os.path.exists(data_src):
+        try:
+            with open(data_src, "rb") as f_hash:
+                dataset_sha256 = hashlib.sha256(f_hash.read()).hexdigest()
+        except Exception:
+            dataset_sha256 = None
+
+    label_protocol = str(df["label_protocol"].iloc[0]) if "label_protocol" in df.columns else (
+        "SYNTHETIC_SIMULATION" if is_synthetic else "UNKNOWN"
     )
+
+    label_verified_val = None
+    if "label_verified" in df.columns:
+        label_verified_val = bool(df["label_verified"].all())
+
+    # ── TRAINING POLICY: LABEL VERIFICATION & MODEL CATEGORIZATION ─────────────
+    # If label_verified=False, the pipeline MUST NOT describe the model as trained
+    # on verified deception labels. It is strictly an experimental task-classification model.
+    if is_synthetic:
+        model_category = "SYNTHETIC_BENCHMARK"
+        intended_interpretation = (
+            "Measures mathematical separation of simulated synthetic Gaussian distributions. "
+            "Cannot be interpreted as human behavior or deception detection."
+        )
+        limitations = [
+            "Trained on simulated synthetic distributions; does not reflect real human behavioral variance",
+            "Cannot be used to assess human honesty, truthfulness, or deception",
+            "Prohibited for punitive, screening, ranking, or consequential decision-making",
+            "Lighting, head movement, and camera angle introduce signal variance"
+        ]
+        print()
+        print("!" * 70)
+        print("  SYNTHETIC TRAINING DATA IN USE")
+        print("  Labels were generated programmatically, NOT from observed deception.")
+        print("  Model Category: SYNTHETIC_BENCHMARK")
+        print("  This model cannot be claimed to detect deception in real humans.")
+        print("  To train on real data: run  python training/collect_data.py")
+        print("!" * 70)
+        print()
+    elif label_verified_val is False:
+        model_category = "EXPERIMENTAL_TASK_CLASSIFICATION"
+        intended_interpretation = (
+            "Measures behavioral divergence between instructed experimental conditions (e.g., prompt compliance). "
+            "Reflects task-directed compliance differences, NOT verified lie detection."
+        )
+        limitations = [
+            "Labels represent instructed experimental tasks (label_verified=False), NOT verified deception",
+            "Non-deceptive emotional stress, cognitive load, or camera anxiety can trigger behavioral anomalies",
+            "Lighting, head movement, and camera angle introduce signal variance",
+            "Prohibited for punitive, screening, ranking, or consequential decision-making"
+        ]
+        print()
+        print("*" * 70)
+        print("  POLICY: EXPERIMENTAL TASK-CLASSIFICATION MODEL")
+        print("  Dataset observations have label_verified=False.")
+        print("  Model learns behavioral differences between instructed task conditions.")
+        print("  It will NOT be described or used as a verified deception-detection model.")
+        print("*" * 70)
+        print()
+    elif label_verified_val is True:
+        model_category = "INDEPENDENTLY_VERIFIED_DECEPTION_DETECTION"
+        intended_interpretation = "Trained on independently verified deception observations."
+        limitations = [
+            "Requires continuous calibration to individual baseline",
+            "Prohibited for punitive, screening, ranking, or consequential decision-making"
+        ]
+    else:
+        model_category = "UNVERIFIED_EXPERIMENTAL"
+        intended_interpretation = "Experimental model trained on data with unverified label provenance."
+        limitations = [
+            "Label verification provenance is unconfirmed",
+            "Prohibited for punitive, screening, ranking, or consequential decision-making"
+        ]
+    # ────────────────────────────────────────────────────────────────────────
+
+    # Split data — Subject-Independent when participant_id is available
+    has_groups = "participant_id" in df.columns and df["participant_id"].nunique() >= 2
+    if has_groups:
+        from sklearn.model_selection import GroupShuffleSplit
+        gss = GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
+        train_idx, test_idx = next(gss.split(X, y, groups=df["participant_id"].values))
+        X_train, X_test = X[train_idx], X[test_idx]
+        y_train, y_test = y[train_idx], y[test_idx]
+        train_p = sorted(list(df["participant_id"].iloc[train_idx].unique()))
+        test_p = sorted(list(df["participant_id"].iloc[test_idx].unique()))
+        split_type = "SUBJECT_INDEPENDENT_GROUP_SPLIT"
+        print(f"[SPLIT] Grouped by participant ({len(train_p)} train, {len(test_p)} test) to prevent leakage:")
+        print(f"        Train participants: {train_p}")
+        print(f"        Test participants : {test_p}")
+    else:
+        split_type = "STRATIFIED_RANDOM"
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42, stratify=y
+        )
+        train_p, test_p = [], []
 
     # Scale features
     scaler = StandardScaler()
@@ -213,14 +355,44 @@ def train_model(model_type: str = "random_forest", data_path: str = None):
             bar = "#" * int(imp * 50)
             print(f"  {name:30s} {imp:.4f} {bar}")
 
-    # Save model and scaler
+    # Save model, scaler, and metadata
     os.makedirs("models", exist_ok=True)
     with open(config.MODEL_PATH, "wb") as f:
         pickle.dump(model, f)
     with open(config.SCALER_PATH, "wb") as f:
         pickle.dump(scaler, f)
+
+    from datetime import datetime
+    import json
+    sessions_count = int(df["session_id"].nunique()) if "session_id" in df.columns else 0
+    participants_count = int(df["participant_id"].nunique()) if "participant_id" in df.columns else 0
+
+    metadata = {
+        "model_type": model_type,
+        "model_category": model_category,
+        "data_source": data_src,
+        "data_provenance": "SYNTHETIC" if is_synthetic else "REAL_HUMAN",
+        "dataset_sha256": dataset_sha256,
+        "random_seed": 42,
+        "split_type": split_type,
+        "label_protocol": label_protocol,
+        "label_verified": label_verified_val,
+        "intended_interpretation": intended_interpretation,
+        "limitations": limitations,
+        "unique_participants_count": participants_count,
+        "unique_sessions_count": sessions_count,
+        "train_participants": train_p,
+        "test_participants": test_p,
+        "train_samples": len(X_train),
+        "test_samples": len(X_test),
+        "trained_at": datetime.now().isoformat()
+    }
+    with open("models/model_metadata.json", "w", encoding="utf-8") as f:
+        json.dump(metadata, f, indent=2)
+
     print(f"\nModel saved to {config.MODEL_PATH}")
     print(f"Scaler saved to {config.SCALER_PATH}")
+    print(f"Metadata saved to models/model_metadata.json")
 
 
 if __name__ == "__main__":

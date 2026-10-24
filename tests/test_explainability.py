@@ -21,6 +21,8 @@ def test_explainability_channel_structure():
     decomp = decomposer.decompose(dummy, polygraph_data={"estimated_hr": 78.0})
     assert "composite_anomaly_score" in decomp
     assert "channels" in decomp
+    assert decomp.get("weight_basis") == "MANUALLY_ASSIGNED_DOMAIN_HEURISTIC"
+    assert decomp.get("score_type") == "HEURISTIC_ESTIMATE"
     channels = decomp["channels"]
     
     assert "ocular" in channels
@@ -32,6 +34,7 @@ def test_explainability_channel_structure():
     for ch_name, ch_dict in channels.items():
         assert 0.0 <= ch_dict["score"] <= 1.0
         assert ch_dict["weight"] > 0.0
+        assert ch_dict.get("weight_basis") == "MANUALLY_ASSIGNED_DOMAIN_HEURISTIC"
 
 
 def test_explainability_evidence_attribution():

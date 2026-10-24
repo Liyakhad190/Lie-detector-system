@@ -34,6 +34,13 @@ class DeceptionModel:
         self._smoothed_prediction = 0.5
         self._baseline_features: Optional[np.ndarray] = None
         self._decomposer = ExplainabilityDecomposer()
+        self.metadata: Dict[str, Any] = {}
+        self.provenance: str = "UNKNOWN"
+        self.model_category: str = "UNKNOWN"
+        self.label_verified: bool = False
+        self.label_protocol: str = "UNKNOWN"
+        self.intended_interpretation: str = ""
+        self.limitations: list = []
         self._load_model()
 
     def _load_model(self):
@@ -49,6 +56,43 @@ class DeceptionModel:
                 with open(config.SCALER_PATH, "rb") as f:
                     self._scaler = pickle.load(f)
                 print(f"[MODEL] Loaded scaler from {config.SCALER_PATH}")
+
+            metadata_path = "models/model_metadata.json"
+            if os.path.exists(metadata_path):
+                import json
+                try:
+                    with open(metadata_path, "r", encoding="utf-8") as f_meta:
+                        self.metadata = json.load(f_meta)
+                        self.provenance = self.metadata.get("data_provenance", "UNKNOWN")
+                        self.model_category = self.metadata.get(
+                            "model_category",
+                            "SYNTHETIC_BENCHMARK" if self.provenance == "SYNTHETIC" else "UNKNOWN"
+                        )
+                        self.label_verified = self.metadata.get("label_verified", False)
+                        self.label_protocol = self.metadata.get("label_protocol", "UNKNOWN")
+                        self.intended_interpretation = self.metadata.get("intended_interpretation", "")
+                        self.limitations = self.metadata.get("limitations", [])
+
+                        if self.provenance == "SYNTHETIC":
+                            print("[MODEL] Checkpoint provenance: SYNTHETIC (Trained on simulated distribution; not validated on human deception).")
+                        elif not self.label_verified:
+                            print(f"[MODEL] Checkpoint category: {self.model_category} (Task-directed instructions; label_verified=False).")
+                except Exception:
+                    self.metadata = {}
+                    self.provenance = "UNKNOWN"
+                    self.model_category = "UNKNOWN"
+                    self.label_verified = False
+                    self.label_protocol = "UNKNOWN"
+                    self.intended_interpretation = ""
+                    self.limitations = []
+            else:
+                self.metadata = {}
+                self.provenance = "UNKNOWN"
+                self.model_category = "UNKNOWN"
+                self.label_verified = False
+                self.label_protocol = "UNKNOWN"
+                self.intended_interpretation = ""
+                self.limitations = []
         except Exception as e:
             print(f"[MODEL] Could not load model: {e}")
             print("[MODEL] Using heuristic-based analysis instead.")
@@ -118,7 +162,7 @@ class DeceptionModel:
 
     def _format_prediction(self, deception_prob: float, method: str,
                            explainability: Dict[str, Any]) -> Dict[str, Any]:
-        """Format, smooth, and attach confidence intervals and scientific diagnostics."""
+        """Format, smooth, and attach prediction stability band and scientific diagnostics."""
         # Apply temporal smoothing
         self._prediction_history.append(deception_prob)
         alpha = config.PREDICTION_SMOOTHING
@@ -130,18 +174,20 @@ class DeceptionModel:
         smoothed = float(np.clip(self._smoothed_prediction, 0.0, 1.0))
         truth_prob = 1.0 - smoothed
 
-        # Empirical standard deviation and confidence interval calculation
+        # Temporal prediction stability: measures how consistent the last 15 frames
+        # of model output are. This is NOT a statistical confidence interval for
+        # deception probability — it reflects signal stability over time only.
         if len(self._prediction_history) > 5:
             hist = list(self._prediction_history)[-15:]
             std_dev = float(np.std(hist))
             stability = 1.0 - std_dev * 2.0
             confidence = float(np.clip(stability, 0.30, 0.95))
-            ci_lower = max(0.0, smoothed - 1.96 * std_dev)
-            ci_upper = min(1.0, smoothed + 1.96 * std_dev)
+            band_lower = max(0.0, smoothed - 1.96 * std_dev)
+            band_upper = min(1.0, smoothed + 1.96 * std_dev)
         else:
             confidence = 0.50
-            ci_lower = max(0.0, smoothed - 0.15)
-            ci_upper = min(1.0, smoothed + 0.15)
+            band_lower = max(0.0, smoothed - 0.15)
+            band_upper = min(1.0, smoothed + 0.15)
 
         # Scientifically responsible classification labels
         if smoothed > 0.65:
@@ -157,17 +203,25 @@ class DeceptionModel:
             label_color = "truth"
             risk_tier = "LOW"
 
+        _band = (round(band_lower, 3), round(band_upper, 3))
         return {
             "deception_probability": round(smoothed, 3),
             "truth_probability": round(truth_prob, 3),
-            "confidence": round(confidence, 3),
-            "confidence_interval": (round(ci_lower, 3), round(ci_upper, 3)),
+            "confidence": round(confidence, 3),           # temporal signal stability [0.30–0.95]
+            # prediction_stability_band: range of model scores over the last 15 frames.
+            # This measures temporal consistency, NOT a statistical CI for deception probability.
+            "prediction_stability_band": _band,
+            "confidence_interval": _band,                 # backward-compat alias (deprecated)
             "label": label,
             "label_color": label_color,
             "risk_tier": risk_tier,
             "method": method,
             "explainability": explainability,
             "raw_score": round(deception_prob, 3),
+            "data_provenance": self.provenance,
+            "model_category": self.model_category,
+            "label_verified": self.label_verified,
+            "label_protocol": self.label_protocol,
             "scientific_disclaimer": config.DISCLAIMER
         }
 
@@ -176,13 +230,18 @@ class DeceptionModel:
             "deception_probability": 0.0,
             "truth_probability": 1.0,
             "confidence": 0.0,
-            "confidence_interval": (0.0, 0.0),
+            "prediction_stability_band": (0.0, 0.0),
+            "confidence_interval": (0.0, 0.0),           # backward-compat alias (deprecated)
             "label": "NO DATA",
             "label_color": "warning",
             "risk_tier": "UNKNOWN",
             "method": "NONE",
             "explainability": self._decomposer._empty_decomposition(),
             "raw_score": 0.0,
+            "data_provenance": self.provenance,
+            "model_category": self.model_category,
+            "label_verified": self.label_verified,
+            "label_protocol": self.label_protocol,
             "scientific_disclaimer": config.DISCLAIMER
         }
 

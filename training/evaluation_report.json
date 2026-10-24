@@ -1,11 +1,61 @@
 {
   "metadata": {
     "model_type": "RandomForestClassifier",
-    "data_source": "data/sample_features.csv (Synthetic Behavioral Dataset)",
+    "data_source": "data/sample_features.csv",
+    "data_provenance": "SYNTHETIC",
+    "dataset_sha256": "0ba04a312409b8a32baae7a75a4a1e64cc33b4217216b33693eb02155cf9038e",
+    "random_seed": 42,
+    "evaluation_timestamp": "2026-10-22T23:22:58.054064",
+    "synthetic_warning": "DATA IS SYNTHETIC. Metrics reflect separation of programmatically generated Gaussian distributions, NOT real-world deception detection performance. Do not interpret these results as evidence that this model can detect deception in human subjects.",
+    "human_performance": "NOT ESTABLISHED",
+    "human_deception_detection_accuracy": "NOT ESTABLISHED",
     "sample_count": 2000,
     "truth_count": 1000,
     "deception_count": 1000,
-    "disclaimer": "EDUCATIONAL & EXPERIMENTAL SYSTEM ONLY | NOT scientifically validated for lie detection | Results are behavioral estimates, NOT definitive truth assessments"
+    "unique_participants": null,
+    "unique_sessions": null,
+    "nan_rows_count": 0,
+    "quality_flag_distribution": {},
+    "has_participant_column": false,
+    "subject_independent_cv": null,
+    "cluster_bootstrap": null,
+    "class_diversity_status": "SUFFICIENT (binary classes)",
+    "sample_size_status": "SUFFICIENT (N >= 50)",
+    "label_verified": null,
+    "label_verification_status": "NOT_SPECIFIED",
+    "data_exclusions": {
+      "total_raw_rows": 2000,
+      "quality_flag_non_ok": 0,
+      "invalid_labels_excluded": 0,
+      "nan_inf_rows_excluded": 0,
+      "final_evaluated_rows": 2000
+    },
+    "reproducibility": {
+      "command": "python training/evaluate_model.py --data data/sample_features.csv --out training/evaluation_report.json --participant-col participant_id",
+      "random_seed": 42,
+      "dataset_sha256": "0ba04a312409b8a32baae7a75a4a1e64cc33b4217216b33693eb02155cf9038e"
+    },
+    "label_protocol": "SYNTHETIC_SIMULATION",
+    "synthetic_benchmark_performance": "EVALUATED",
+    "controlled_task_classification_performance": "NOT_APPLICABLE",
+    "independently_validated_deception_detection": "NOT ESTABLISHED",
+    "performance_scopes": {
+      "synthetic_benchmark": {
+        "status": "EVALUATED",
+        "description": "Measures mathematical separation of simulated synthetic Gaussian distributions."
+      },
+      "controlled_task_classification": {
+        "status": "NOT_APPLICABLE",
+        "description": "Measures behavioral divergence between instructed experimental conditions (e.g. prompt compliance)."
+      },
+      "independently_validated_deception_detection": {
+        "status": "NOT ESTABLISHED",
+        "reason": "Synthetic data cannot establish human deception detection",
+        "description": "No claim of human lie detection accuracy is supported by this dataset or model."
+      }
+    },
+    "disclaimer": "EDUCATIONAL & EXPERIMENTAL SYSTEM ONLY | Output is a behavioral-anomaly score, NOT a lie verdict | NOT scientifically validated for lie detection | Results are behavioral estimates, NOT definitive truth assessments | Lighting, movement, fatigue, stress & anxiety affect measured signals | Do NOT use to accuse, rank, or make consequential decisions about individuals",
+    "deception_detection_validity": "CANNOT BE ESTABLISHED \u2014 synthetic labels"
   },
   "metrics": {
     "accuracy": 1.0,
@@ -37,6 +87,7 @@
     "pr_auc": 1.0,
     "brier_score": 0.00038451410570790806,
     "expected_calibration_error": 0.00812590773809527,
+    "calibration_status": "VALID (N >= 50, binary classes)",
     "cv_accuracy_mean": 1.0,
     "cv_accuracy_std": 0.0,
     "cv_balanced_accuracy_mean": 1.0,
